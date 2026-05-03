@@ -28,7 +28,7 @@ export type Booking = {
   id: string
   user_id: string | null
   patient_name: string
-  age: number | null
+  age: string | null
   booked_by: string | null
   relation: string | null
   phone: string | null
@@ -39,6 +39,7 @@ export type Booking = {
   address: string | null
   notes: string | null
   status: 'pending' | 'done' | 'missed'
+  payment_status: 'pending' | 'paid'
   submitted_at: string
   created_at: string
 }

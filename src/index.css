@@ -120,4 +120,7 @@
   .zebra-table tr:nth-child(even), .zebra-row:nth-child(even) {
     background-color: #f1f5f4;
   }
+  .form-input {
+    @apply w-full border border-slate-200 rounded-xl py-2.5 px-4 text-sm outline-none transition-all bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500;
+  }
 }

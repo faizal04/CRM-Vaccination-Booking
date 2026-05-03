@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts'
 import { supabase, type Booking } from '../lib/supabase'
-import { getVaccinePrice, VACCINE_COLORS } from '../lib/vaccines'
+import { VACCINE_COLORS } from '../lib/vaccines'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -41,16 +41,24 @@ const STATUS_ICONS: Record<string, string> = {
 export default function Dashboard() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [totalPatients, setTotalPatients] = useState(0)
+  const [priceMap, setPriceMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [bookingsRes, patientsRes] = await Promise.all([
+      const [bookingsRes, patientsRes, vaccinesRes] = await Promise.all([
         supabase.from('bookings').select('*').order('date', { ascending: false }),
         supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'user'),
+        supabase.from('vaccines').select('name, price'),
       ])
       setBookings(bookingsRes.data ?? [])
       setTotalPatients(patientsRes.count ?? 0)
+      // Build price map from Supabase vaccines table
+      const map: Record<string, number> = {}
+      ;(vaccinesRes.data ?? []).forEach((v: { name: string; price: number }) => {
+        map[v.name] = Number(v.price)
+      })
+      setPriceMap(map)
       setLoading(false)
     }
     load()
@@ -66,11 +74,14 @@ export default function Dashboard() {
   const lastMonthBookings = bookings.filter(b => b.date?.startsWith(lastMonthStr))
 
   const thisMonthRevenue = thisMonthBookings
-    .filter(b => b.status === 'done')
-    .reduce((sum, b) => sum + getVaccinePrice(b.vaccine), 0)
+    .filter(b => b.payment_status === 'paid')
+    .reduce((sum, b) => sum + (priceMap[b.vaccine] ?? 0), 0)
   const lastMonthRevenue = lastMonthBookings
-    .filter(b => b.status === 'done')
-    .reduce((sum, b) => sum + getVaccinePrice(b.vaccine), 0)
+    .filter(b => b.payment_status === 'paid')
+    .reduce((sum, b) => sum + (priceMap[b.vaccine] ?? 0), 0)
+
+  const pendingPayments = bookings.filter(b => b.status === 'done' && b.payment_status !== 'paid')
+  const pendingPaymentsAmount = pendingPayments.reduce((sum, b) => sum + (priceMap[b.vaccine] ?? 0), 0)
 
   const bookingsTrend = lastMonthBookings.length
     ? Math.round(((thisMonthBookings.length - lastMonthBookings.length) / lastMonthBookings.length) * 100)
@@ -130,7 +141,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {/* Bookings this month */}
         <div className="bg-white p-6 rounded-xl custom-shadow">
           <div className="flex justify-between items-start mb-4">
@@ -165,6 +176,25 @@ export default function Dashboard() {
               <h3 className="text-xl font-bold text-slate-400">{formatINR(lastMonthRevenue)}</h3>
               <span className="text-[10px] text-slate-400 font-bold uppercase">Last Month</span>
             </div>
+          </div>
+        </div>
+
+        {/* Pending Payments */}
+        <div className="bg-white p-6 rounded-xl custom-shadow border-l-4 border-red-400">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-red-50 rounded-lg text-red-600">
+              <span className="material-symbols-outlined">pending_actions</span>
+            </div>
+            {pendingPayments.length > 0 && (
+              <span className="text-xs font-bold px-2 py-1 rounded bg-red-50 text-red-600">
+                {pendingPayments.length} booking{pendingPayments.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <p className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1">Pending Payments</p>
+          <div className="space-y-0.5">
+            <h3 className="text-3xl font-bold text-red-600">{formatINR(pendingPaymentsAmount)}</h3>
+            <p className="text-xs text-slate-400">Vaccine done · Payment not collected</p>
           </div>
         </div>
 
